@@ -1,6 +1,6 @@
 async function refreshData() {
     try {
-        const response = await fetch("status.json?_=" + Date.now());
+        const response = await fetch("https://breathalyzer-api.onrender.com/status");
         const data = await response.json();
 
         document.getElementById("status").innerText = data.status;
@@ -15,5 +15,5 @@ async function refreshData() {
     }
 }
 
-setInterval(refreshData, 2000); // refresh every 2 sec
+setInterval(refreshData, 2000);
 refreshData();
