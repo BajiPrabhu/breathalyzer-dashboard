@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import time
@@ -10,61 +10,80 @@ CORS(app)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Store status in memory (simple solution)
+# Store latest status in memory (simple storage)
 status_data = {
-    "status": "Waiting for Pi...",
+    "status": "Idle",
     "timestamp": "",
     "last_image": ""
 }
 
-# -----------------------------
-# API ROUTES
-# -----------------------------
 
+# -------------------------------
+# 1) HOME ROUTE
+# -------------------------------
 @app.route("/")
 def home():
-    return "Breathalyzer API Running"
+    return jsonify({"message": "Breathalyzer API Running"})
 
+
+# -------------------------------
+# 2) GET STATUS
+# -------------------------------
 @app.route("/status", methods=["GET"])
 def get_status():
-    """Dashboard fetches this"""
     return jsonify(status_data)
 
+
+# -------------------------------
+# 3) UPDATE STATUS
+# -------------------------------
 @app.route("/update_status", methods=["POST"])
 def update_status():
-    """Pi sends status updates"""
-    global status_data
     data = request.json
-    status_data.update(data)
-    return jsonify({"message": "Status updated"}), 200
 
+    status_data["status"] = data.get("status", status_data["status"])
+    status_data["timestamp"] = data.get("timestamp", status_data["timestamp"])
+    status_data["last_image"] = data.get("last_image", status_data["last_image"])
+
+    return jsonify({"message": "Status updated", "status": status_data})
+
+
+# -------------------------------
+# 4) IMAGE UPLOAD
+# -------------------------------
 @app.route("/upload_image", methods=["POST"])
 def upload_image():
-    """Pi uploads image here"""
     if "image" not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
+        return jsonify({"error": "No image file sent"}), 400
 
     image = request.files["image"]
     filename = f"img_{int(time.time())}.jpg"
-    save_path = os.path.join(UPLOAD_FOLDER, filename)
-    image.save(save_path)
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
 
-    # Public URL for the dashboard
+    image.save(filepath)
+
     file_url = f"https://breathalyzer-api.onrender.com/uploads/{filename}"
 
-    # update last_image
+    # Store latest uploaded image in memory
     status_data["last_image"] = file_url
+    status_data["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    return jsonify({"url": file_url})
-    
-# Serve uploaded images
-@app.route('/uploads/<filename>')
+    return jsonify({
+        "message": "Image uploaded",
+        "url": file_url
+    })
+
+
+# -------------------------------
+# 5) SERVE UPLOADED IMAGES
+# -------------------------------
+@app.route("/uploads/<filename>")
 def uploaded_file(filename):
-    return app.send_static_file(f"../uploads/{filename}")
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 
-# -----------------------------
-# START
-# -----------------------------
+# -------------------------------
+# RUN (only used locally)
+# -------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
